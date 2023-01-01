@@ -1,0 +1,7 @@
+# go
+go.sum
+# application
+actoot
+auth.json
+# private
+todo.txt
