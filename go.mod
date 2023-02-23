@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	9fans.net/go v0.0.4
-	github.com/mattermost/html2text v0.0.0-20170830143716-d47a5532a7bc
+	github.com/k3a/html2text v1.1.0
 	github.com/mattn/go-mastodon v0.0.6
 )
 

@@ -12,7 +12,8 @@ import (
 	"sync"
 
 	"9fans.net/go/acme"
-	"github.com/mattermost/html2text"
+	"github.com/k3a/html2text"
+	//"github.com/mattermost/html2text"
 	"github.com/mattn/go-mastodon"
 )
 
@@ -160,10 +161,8 @@ Spoiler: %s
 
 func printReplyTemplate(status *mastodon.Status) (string, error) {
 	var buf bytes.Buffer
-	body, err := html2text.FromString(status.Content)
-	if err != nil {
-		return "", err
-	}
+	var err error
+	body := html2text.HTML2TextWithOptions(status.Content, html2text.WithLinksInnerText())
 	for _, line := range strings.Split(body, "\n") {
 		_, err = fmt.Fprintf(&buf, "# %s\n", line)
 		if err != nil {
@@ -246,16 +245,33 @@ func printToot(win *acme.Win, status *mastodon.Status) error {
 			return err
 		}
 	}
-	var bodyText string
 	// FIXME: this rendering is kind of shit
 	// it breaks @ and # by appending spaces, and pads parenthesized URLs preventing Acme from double-click selecting
-	bodyText, err = html2text.FromString(status.Content)
+	bodyText := html2text.HTML2TextWithOptions(status.Content, html2text.WithLinksInnerText())
 	if err != nil {
 		return err
 	}
 	err = win.Fprintf("body", "%s\n", bodyText)
 	if err != nil {
 		return err
+	}
+	for _, attachment := range(status.MediaAttachments) {
+		err = win.Fprintf("body", "Attachment:\n")
+		if err != nil {
+			win.Errf("couldn't preview attachment: %s", err)
+			continue
+		}
+		if len(attachment.Description) > 0 {
+			err = win.Fprintf("body", "%q\n", attachment.Description)
+			if err != nil {
+				win.Errf("couldn't preview attachment: %s", err)
+				continue
+			}
+		}
+		err = win.Fprintf("body", "%s\n", attachment.RemoteURL)
+		if err != nil {
+			win.Errf("couldn't preview attachment: %s", err);
+		}
 	}
 	err = win.Fprintf("body", "%d replies\t%d repeats\t%d favourites\n", status.RepliesCount, status.ReblogsCount, status.FavouritesCount)
 	if err != nil {
@@ -352,10 +368,7 @@ func statusShort(status *mastodon.Status) (string, error) {
 	} else {
 		source = &status.Content
 	}
-	body, err := html2text.FromString(*source)
-	if err != nil {
-		return "", err
-	}
+	body := html2text.HTML2TextWithOptions(*source, html2text.WithLinksInnerText())
 	if hasCW {
 		body = fmt.Sprintf("Subject: %s", body)
 	}
@@ -363,13 +376,10 @@ func statusShort(status *mastodon.Status) (string, error) {
 	if splitPoint > 0 {
 		body = fmt.Sprintf("%s...", body[0:splitPoint])
 	}
-	if len(body) > 55 {
-		body = fmt.Sprintf("%s...", strings.TrimSpace(body[0:55]))
+	if len(body) > 75 {
+		body = fmt.Sprintf("%s...", strings.TrimSpace(body[0:75]))
 	}
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%s\t@%s\t%s\t%s", status.ID, status.Account.Acct, status.CreatedAt.String(), body), nil
+	return fmt.Sprintf("%s\t@%s\t%s\n%s", status.ID, status.Account.Acct, status.CreatedAt.String(), body), nil
 }
 
 func getTimeline(timeline string, pg *mastodon.Pagination) ([]*mastodon.Status, error) {
@@ -642,6 +652,7 @@ func login() error {
 
 func main() {
 	var wg sync.WaitGroup
+	html2text.SetUnixLbr(true)
 	err := login()
 	if err != nil {
 		fmt.Printf("couldn't authenticate: %s\n", err)
